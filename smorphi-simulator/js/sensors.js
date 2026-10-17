@@ -333,20 +333,92 @@ class SensorSuite {
 
     const cpData = checkpointManager
       ? checkpointManager.getScriptData()
-      : { list: [], navTarget: null, discoveredCount: 0, total: 0 };
+      : { list: [], navTarget: null, lastDecodedTag: null, discoveredCount: 0, total: 0 };
+
+    // Target tracking derived strictly from decoded AprilTag coordinates (no omniscient cheat)
+    let targetObj;
+    if (checkpointManager && checkpointManager.revealedTarget) {
+      const gx = checkpointManager.revealedTarget.x;
+      const gy = checkpointManager.revealedTarget.y;
+      const dx = gx - robot.x;
+      const dy = gy - robot.y;
+      const dist = Math.hypot(dx, dy);
+      let relAngle = Math.atan2(dy, dx) - robot.theta;
+      while (relAngle > Math.PI) relAngle -= 2 * Math.PI;
+      while (relAngle < -Math.PI) relAngle += 2 * Math.PI;
+
+      targetObj = {
+        active: true,
+        x: gx,
+        y: gy,
+        label: checkpointManager.revealedTarget.label,
+        isFinish: !!checkpointManager.revealedTarget.isFinish,
+        distance: dist,
+        angle: relAngle,
+        angleDeg: (relAngle * 180) / Math.PI,
+        reached: dist < 0.35,
+      };
+    } else {
+      targetObj = {
+        active: false,
+        x: null,
+        y: null,
+        label: "NONE",
+        isFinish: false,
+        distance: Infinity,
+        angle: 0,
+        angleDeg: 0,
+        reached: false,
+      };
+    }
+
+    const visibleTags = checkpointManager && typeof checkpointManager.getVisibleTags === "function"
+      ? checkpointManager.getVisibleTags(robot, this.map)
+      : [];
+
+    const maxCamRange = (CONFIG.CAMERA && CONFIG.CAMERA.MAX_RANGE) || 2.0;
+    const camFovDeg = (CONFIG.CAMERA && CONFIG.CAMERA.FOV_DEG) || 120;
+    const camHalfFovRad = (camFovDeg * Math.PI) / 360;
+
+    // Mask cargo items hidden in fog beyond camera view
+    const maskedCargo = {
+      ...this.cargo,
+      cubes: (this.cargo.cubes || []).map(c => {
+        const inScoop = c.state === "CAPTURED_INSIDE_MESH";
+        const inRange = c.dist <= maxCamRange;
+        const inFov = Math.abs(c.relAngle || 0) <= camHalfFovRad;
+        const isVisible = inScoop || (inRange && inFov);
+        return {
+          ...c,
+          visible: isVisible,
+          dist: isVisible ? c.dist : Infinity,
+          relAngle: isVisible ? c.relAngle : 0,
+          relAngleDeg: isVisible ? c.relAngleDeg : 0,
+        };
+      }),
+    };
 
     return {
       lidar: lidarProxy,
       imu: { ...this.imu },
       pose: { ...this.pose },
-      cargo: { ...this.cargo },
+      cargo: maskedCargo,
       mission: { ...this.mission },
       shape: "SINGLE_BLOCK",
       isMorphing: false,
-      target: { ...this.target },
+      target: targetObj,
       collision: robot.inCollision,
       checkpoints: cpData.list,
-      navTarget: cpData.navTarget,
+      navTarget: targetObj.active ? { ...targetObj } : null,
+      apriltag: {
+        maxRange: (CONFIG.CHECKPOINT && CONFIG.CHECKPOINT.DETECTION_RANGE) || 2.0,
+        scanRadius: (CONFIG.CHECKPOINT && CONFIG.CHECKPOINT.SCAN_RADIUS) || 0.65,
+        fovDeg: (CONFIG.CHECKPOINT && CONFIG.CHECKPOINT.FOV_DEG) || 120,
+        visibleTags: visibleTags,
+        hasVisibleTag: visibleTags.length > 0,
+        lastDecoded: cpData.lastDecodedTag,
+        activeTarget: targetObj.active ? { ...targetObj } : null,
+      },
       discoveredCheckpoints: cpData.discoveredCount,
     };
   }

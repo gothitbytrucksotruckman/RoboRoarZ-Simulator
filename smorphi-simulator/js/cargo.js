@@ -330,7 +330,6 @@ class CargoManager {
           hasScoopContact = true;
 
           // Transfer forward velocity with floor drag penalty
-          const pushForce = Math.max(0, robot.vx);
           cube.vx = robot.globalVx * 0.9;
           cube.vy = robot.globalVy * 0.9;
         } else {

@@ -127,8 +127,8 @@ class SmorphiRobot {
     this.inCollision = false;
     this.collisionCount = 0;
     this.totalDistanceTraveled = 0;
-    this.wheelAngles = [0, 0, 0, 0];
-    this.wheelSpeeds = [0, 0, 0, 0];
+    this.wheelAngles = new Float32Array(4);
+    this.wheelSpeeds = new Float32Array(4);
   }
 
   /**

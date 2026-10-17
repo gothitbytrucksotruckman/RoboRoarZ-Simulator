@@ -75,10 +75,17 @@ const CONFIG = {
   LIDAR: {
     NUM_BEAMS: 360, // 360 beams (1 degree angular resolution)
     MIN_RANGE: 0.05, // 5 cm minimum detection range
-    MAX_RANGE: 5.0, // 5.0 meters maximum range
+    MAX_RANGE: 2.0, // 2.0 meters maximum range (true Fog of War - cannot see whole map)
     SCAN_RATE: 10, // Hz emulated scan frequency
     NOISE_SIGMA: 0.004, // 4mm Gaussian noise
     ELEVATION_Y: 0.285, // meters in 3D
+  },
+
+  // Forward Vision / AprilTag Camera Emulation
+  CAMERA: {
+    MAX_RANGE: 2.0, // 2.0 meters maximum optical detection range
+    FOV_DEG: 120, // 120-degree forward vision cone
+    SCAN_RATE: 10, // Hz emulated scan frequency
   },
 
   // 6-DOF IMU Emulation
@@ -131,8 +138,10 @@ const CONFIG = {
 
   // Checkpoints (AprilTag pads under each cargo cube)
   CHECKPOINT: {
-    SCAN_RADIUS: 0.60, // meters proximity needed to scan a tag
-    TAG_SIZE: 0.16,    // meters, floor tag footprint
+    SCAN_RADIUS: 0.65,     // meters proximity needed to decode floor AprilTag payload
+    DETECTION_RANGE: 2.0,  // meters maximum optical detection range
+    FOV_DEG: 120,          // forward camera field of view in degrees
+    TAG_SIZE: 0.16,        // meters, floor tag footprint
   },
 
   // Visual Theme Colors

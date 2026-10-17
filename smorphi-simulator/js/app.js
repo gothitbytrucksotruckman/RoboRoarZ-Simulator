@@ -38,7 +38,7 @@ class SmorphiApp {
     this.fog = new FogOfWar(this.map.width, this.map.height, CONFIG.MAP_NAVIGATION.gridResolution);
     this.fog.revealDisk(this.map.spawn.x, this.map.spawn.y, CONFIG.FOG.START_BLOB);
     this.checkpoints = new CheckpointManager();
-    this.checkpoints.syncToCargo(this.cargo);
+    this.checkpoints.syncToCargo(this.cargo, this.map);
 
     this.robot = new SmorphiRobot(this.map.spawn.x, this.map.spawn.y, 0);
     this.physics = new PhysicsEngine(this.map);
@@ -105,7 +105,7 @@ class SmorphiApp {
       });
 
       // Set default script from codeEngine
-      this.editor.setValue(this.codeEngine.presets.default_avoidance, -1);
+      this.editor.setValue(this.codeEngine.presets.apriltag_nav, -1);
     } else {
       console.warn("[SmorphiApp] Ace Editor not loaded, falling back to textarea");
     }
@@ -197,7 +197,7 @@ class SmorphiApp {
 
     if (btnResetCode) {
       btnResetCode.addEventListener("click", () => {
-        const val = presetSelect ? presetSelect.value : "default_avoidance";
+        const val = presetSelect ? presetSelect.value : "apriltag_nav";
         if (this.editor && this.codeEngine.presets[val]) {
           this.editor.setValue(this.codeEngine.presets[val], -1);
           this.codeEngine.log("Editor reset to selected template.");
@@ -469,7 +469,7 @@ class SmorphiApp {
     }
 
     // Render 3D View and Telemetry
-    const isGoalReached = this.missionState === "FINISHED" || (this.sensors.target && this.sensors.target.reached);
+    const isGoalReached = this.missionState === "FINISHED";
     this.view3d.update(this.robot, this.sensors, dt, this.cargo, isGoalReached);
     this.telemetry.update(this.robot, this.sensors, this.map);
   }
@@ -660,7 +660,7 @@ class SmorphiApp {
    * Clear fog exploration and re-sync checkpoints to the freshly spawned cubes.
    */
   resetExploration() {
-    this.checkpoints.syncToCargo(this.cargo);
+    this.checkpoints.syncToCargo(this.cargo, this.map);
     this.view3d.resetExploration();
   }
 

@@ -147,7 +147,7 @@ for (let i = 0; i < 3; i++) {
   assert.strictEqual(cp.isNext, i === 0, `Only the first checkpoint starts flagged as next`);
 }
 
-const probe = { x: 0, y: 0 };
+const probe = { x: 0, y: 0, theta: 0 };
 probe.x = cpMgr.checkpoints[0].x; probe.y = cpMgr.checkpoints[0].y;
 let discoveredEvents = 0;
 cpMgr.onDiscover = () => { discoveredEvents++; };
@@ -168,7 +168,7 @@ assert.strictEqual(cpMgr.revealedTarget.x, map.goal.x, "Finish target x must equ
 assert.strictEqual(discoveredEvents, 3, "Exactly three discovery events expected");
 
 // --- Checkpoints: re-sync on respawn clears discovered state ---
-cpMgr.syncToCargo(cargo);
+cpMgr.syncToCargo(cargo, map);
 assert.strictEqual(cpMgr.revealedTarget, null, "Re-sync must clear the revealed target");
 assert(cpMgr.checkpoints.every(c => !c.discovered), "Re-sync must reset all discovered flags");
 
@@ -178,5 +178,69 @@ assert.strictEqual(cpData.list.length, 3);
 assert.strictEqual(cpData.discoveredCount, 0);
 assert.strictEqual(cpData.navTarget, null);
 
+// --- Limited Sensor Range & AprilTag Payload Assertions ---
+assert.strictEqual(CONFIG.LIDAR.MAX_RANGE, 2.0, "LiDAR max range must be bounded to 2.0m for true fog");
+assert.strictEqual(CONFIG.CHECKPOINT.SCAN_RADIUS, 0.65, "AprilTag scan proximity must be 0.65m");
+assert.strictEqual(CONFIG.CHECKPOINT.DETECTION_RANGE, 2.0, "AprilTag max visual detection must be 2.0m");
+
+for (const cp of cpMgr.checkpoints) {
+  assert(cp.payload, `CP ${cp.id} must have encoded payload`);
+  assert(typeof cp.payload.nextX === "number", `CP ${cp.id} payload must contain nextX coordinate`);
+  assert(typeof cp.payload.nextY === "number", `CP ${cp.id} payload must contain nextY coordinate`);
+}
+
+// Discover CP-1 and test payload decoding
+probe.x = cpMgr.checkpoints[0].x;
+probe.y = cpMgr.checkpoints[0].y;
+cpMgr.update(1 / 60, probe, map);
+assert(cpMgr.lastDecodedTag, "Discovering a tag must populate lastDecodedTag");
+assert.strictEqual(cpMgr.lastDecodedTag.tagId, 1);
+assert.strictEqual(cpMgr.lastDecodedTag.coordinate.x, cpMgr.checkpoints[1].x);
+
 console.log("Fog-of-war & checkpoint assertions passed successfully!");
+
+// =============================================================
+// Camera FOV & Detection Range tests
+// =============================================================
+console.log("\nRunning camera FOV & detection range tests...");
+
+cargo.spawnCubes(map);
+const fovMgr = new CheckpointManager();
+fovMgr.syncToCargo(cargo, map);
+
+const cp0 = fovMgr.checkpoints[0];
+
+// Robot 0.5m away from tag, facing AWAY (theta = opposite direction)
+const awayAngle = Math.atan2(cp0.y - 2.5, cp0.x - 2.5); // angle FROM center TO tag
+const fovProbe = { x: cp0.x - Math.cos(awayAngle) * 0.5, y: cp0.y - Math.sin(awayAngle) * 0.5, theta: awayAngle + Math.PI };
+fovMgr.update(1 / 60, fovProbe, map);
+assert(!fovMgr.checkpoints[0].discovered, "Tag must NOT be discovered when robot faces away (outside FOV)");
+
+// Same position, now facing TOWARD the tag
+fovProbe.theta = awayAngle;
+fovMgr.update(1 / 60, fovProbe, map);
+assert(fovMgr.checkpoints[0].discovered, "Tag must be discovered when robot faces toward it (inside FOV)");
+
+// Detection range: robot 3.0m away (beyond 0.65m scan radius) should NOT detect
+const fovMgr2 = new CheckpointManager();
+fovMgr2.syncToCargo(cargo, map);
+const cp0b = fovMgr2.checkpoints[0];
+const toTag = Math.atan2(cp0b.y - 1.0, cp0b.x - 1.0);
+const farProbe = { x: cp0b.x - Math.cos(toTag) * 3.0, y: cp0b.y - Math.sin(toTag) * 3.0, theta: toTag };
+fovMgr2.update(1 / 60, farProbe, map);
+assert(!fovMgr2.checkpoints[0].discovered, "Tag must NOT be discovered beyond SCAN_RADIUS (0.65m)");
+
+// getVisibleTags should use DETECTION_RANGE (2.0m), not SCAN_RADIUS
+const fovMgr3 = new CheckpointManager();
+fovMgr3.syncToCargo(cargo, map);
+const cp0c = fovMgr3.checkpoints[0];
+const toTag3 = Math.atan2(cp0c.y - 1.0, cp0c.x - 1.0);
+const midProbe = { x: cp0c.x - Math.cos(toTag3) * 1.5, y: cp0c.y - Math.sin(toTag3) * 1.5, theta: toTag3 };
+const visTags = fovMgr3.getVisibleTags(midProbe, map);
+// Tag should be visible at 1.5m (within 2.0m detection range) if LOS is clear
+if (fovMgr3._hasLineOfSight(midProbe.x, midProbe.y, cp0c.x, cp0c.y, map)) {
+  assert(visTags.length > 0, "getVisibleTags must detect tag at 1.5m (within DETECTION_RANGE 2.0m)");
+}
+
+console.log("Camera FOV & detection range assertions passed successfully!");
 

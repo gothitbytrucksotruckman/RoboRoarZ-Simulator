@@ -905,6 +905,13 @@ class Viewport3D {
       }
     }
 
+    // Goal beacon (masked by fog of war until explored or revealed by final AprilTag)
+    if (this.goalGroup) {
+      const isFinishRevealed = this.checkpoints && this.checkpoints.revealedTarget && this.checkpoints.revealedTarget.isFinish;
+      const isGoalExplored = this.fog.isExplored(this.map.goal.x, this.map.goal.y);
+      this.goalGroup.visible = exploreAll || isGoalExplored || isFinishRevealed;
+    }
+
     // Checkpoint pads + pulse animation
     for (const m of this.checkpointMeshes) {
       m.group.visible = exploreAll || this.fog.isExplored(m.cp.x, m.cp.y);
